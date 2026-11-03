@@ -27,6 +27,9 @@ export function sideNavItems(opts: {
   hasServerlessEndpoints?: boolean;
   hasDurableStreams?: boolean;
   isConcurrencyEnabled?: boolean;
+  // A support session is scoped to one tenant: no tenant list to manage or
+  // create from.
+  isSupport?: boolean;
 }): SideNavSection[] {
   return [
     {
@@ -320,7 +323,7 @@ export function sideNavItems(opts: {
             />
           ),
         },
-        ...(!opts.isControlPlaneEnabled
+        ...(!opts.isControlPlaneEnabled && !opts.isSupport
           ? [
               {
                 key: 'tenants',

@@ -21,6 +21,9 @@ export function settingsNavGroups(opts: {
   isControlPlaneEnabled?: boolean;
   isOrganizationOwner?: boolean;
   canManageSso?: boolean;
+  // A support session cannot manage members or API tokens (the engine
+  // denies those routes to support tokens), so the pages are not offered.
+  isSupport?: boolean;
 }): SettingsNavGroup[] {
   const groups: SettingsNavGroup[] = [];
 
@@ -37,18 +40,22 @@ export function settingsNavGroups(opts: {
           to: appRoutes.tenantSettingsOverviewRoute.to,
           params,
         },
-        {
-          key: 'members',
-          name: 'Members',
-          to: appRoutes.tenantSettingsMembersRoute.to,
-          params,
-        },
-        {
-          key: 'api-tokens',
-          name: 'API Tokens',
-          to: appRoutes.tenantSettingsApiTokensRoute.to,
-          params,
-        },
+        ...(!opts.isSupport
+          ? [
+              {
+                key: 'members',
+                name: 'Members',
+                to: appRoutes.tenantSettingsMembersRoute.to,
+                params,
+              },
+              {
+                key: 'api-tokens',
+                name: 'API Tokens',
+                to: appRoutes.tenantSettingsApiTokensRoute.to,
+                params,
+              },
+            ]
+          : []),
         {
           key: 'integrations',
           name: 'Integrations',

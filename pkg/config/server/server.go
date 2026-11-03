@@ -531,6 +531,29 @@ type ConfigFileAuth struct {
 	Github ConfigFileAuthGithub `mapstructure:"github" json:"github,omitempty"`
 
 	ControlPlaneExchangeTokenConfig ConfigFileAuthControlPlaneExchangeToken `mapstructure:"controlPlaneExchangeToken" json:"controlPlaneExchangeToken,omitempty"`
+
+	SupportTokenConfig ConfigFileAuthSupportToken `mapstructure:"supportToken" json:"supportToken,omitempty"`
+}
+
+// ConfigFileAuthSupportToken configures support tokens: short-lived, tenant-scoped tokens issued
+// by the control plane's support service to Hatchet staff who hold a Teleport-approved support
+// role. They are verified with their own public keyset and audience, separate from the regular
+// control plane exchange token, so neither can be swapped for the other.
+type ConfigFileAuthSupportToken struct {
+	// JWTPublicKeyset and JWTPublicKeysetFile follow the same format as the control plane
+	// exchange token keyset: a base64 raw-encoded (no padding) JSON Tink keyset. Only the public
+	// keyset is needed here.
+	JWTPublicKeyset     string `mapstructure:"jwtPublicKeyset" json:"jwtPublicKeyset,omitempty"`
+	JWTPublicKeysetFile string `mapstructure:"jwtPublicKeysetFile" json:"jwtPublicKeysetFile,omitempty"`
+
+	// Issuer is the expected issuer for support tokens. This should be set to the URL of the control plane instance.
+	Issuer string `mapstructure:"issuer" json:"issuer,omitempty"`
+
+	// Audience is the expected audience for support tokens. It must differ from the exchange token audience.
+	Audience string `mapstructure:"audience" json:"audience,omitempty" default:"hatchet-support"`
+
+	// Enabled controls whether support tokens are accepted by this Hatchet instance.
+	Enabled bool `mapstructure:"enabled" json:"enabled,omitempty" default:"false"`
 }
 
 type ConfigFileAuthControlPlaneExchangeToken struct {
@@ -829,6 +852,16 @@ type AuthConfig struct {
 	JWTManager token.JWTManager
 
 	ExchangeTokenClient exchangetoken.ExchangeTokenClient
+
+	// SupportTokenClient validates support tokens (see ConfigFileAuthSupportToken). nil when
+	// support tokens are disabled, in which case any support token is rejected.
+	SupportTokenClient exchangetoken.SupportTokenClient
+
+	// SupportRoleOperations lists, per support role (SUPPORT_VIEWER, SUPPORT_OPERATOR), the
+	// extension operations that role may perform. Support roles never use AllowedOperations or
+	// AllowedWriteOperations: an extension operation that is not listed here is denied to them,
+	// and OSS operations are always checked against rbac.yaml.
+	SupportRoleOperations map[string][]string
 
 	CustomAuthenticator CustomAuthenticator
 
@@ -1311,6 +1344,13 @@ func BindAllEnv(v *viper.Viper) {
 	_ = v.BindEnv("auth.controlPlaneExchangeToken.jwtPublicKeysetFile", "SERVER_AUTH_CONTROL_PLANE_EXCHANGE_TOKEN_JWT_PUBLIC_KEYSET_FILE")
 	_ = v.BindEnv("auth.controlPlaneExchangeToken.issuer", "SERVER_AUTH_CONTROL_PLANE_EXCHANGE_TOKEN_ISSUER")
 	_ = v.BindEnv("auth.controlPlaneExchangeToken.audience", "SERVER_AUTH_CONTROL_PLANE_EXCHANGE_TOKEN_AUDIENCE")
+
+	// support token options
+	_ = v.BindEnv("auth.supportToken.enabled", "SERVER_AUTH_SUPPORT_TOKEN_ENABLED")
+	_ = v.BindEnv("auth.supportToken.jwtPublicKeyset", "SERVER_AUTH_SUPPORT_TOKEN_JWT_PUBLIC_KEYSET")
+	_ = v.BindEnv("auth.supportToken.jwtPublicKeysetFile", "SERVER_AUTH_SUPPORT_TOKEN_JWT_PUBLIC_KEYSET_FILE")
+	_ = v.BindEnv("auth.supportToken.issuer", "SERVER_AUTH_SUPPORT_TOKEN_ISSUER")
+	_ = v.BindEnv("auth.supportToken.audience", "SERVER_AUTH_SUPPORT_TOKEN_AUDIENCE")
 
 	// misc options
 	_ = v.BindEnv("versionOverride", "SERVER_VERSION_OVERRIDE")

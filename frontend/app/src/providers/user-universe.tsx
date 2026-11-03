@@ -1,8 +1,19 @@
 import useControlPlane from '@/hooks/use-control-plane';
 import api, { controlPlaneApi } from '@/lib/api/api';
 import { OrganizationForUserList } from '@/lib/api/generated/cloud/data-contracts';
-import { TenantMember } from '@/lib/api/generated/data-contracts';
+import {
+  SupportGrant,
+  SupportGrantRole,
+} from '@/lib/api/generated/control-plane/data-contracts';
+import {
+  Tenant,
+  TenantMember,
+  TenantMemberRole,
+  TenantVersion,
+} from '@/lib/api/generated/data-contracts';
 import { useApiError } from '@/lib/hooks';
+import { getSupportSession } from '@/lib/support-session';
+import queryClient from '@/query-client';
 import { appRoutes } from '@/router';
 import {
   useMutation,
@@ -70,9 +81,71 @@ type PossibleQueryResponses =
       tenantMemberships: TenantMember[];
     };
 
+// A support session is scoped to one tenant and cannot list memberships or
+// organizations, so the grant stands in for the staff member's only
+// membership. The role maps onto the dashboard's own gating: viewers are
+// read-only, operators can run the operational writes a MEMBER can.
+export function supportGrantTenantMember(
+  grant: SupportGrant,
+  tenant?: Tenant,
+): TenantMember {
+  return {
+    metadata: {
+      id: grant.id,
+      createdAt: grant.createdAt,
+      updatedAt: grant.createdAt,
+    },
+    role:
+      grant.role === SupportGrantRole.SUPPORT_OPERATOR
+        ? TenantMemberRole.MEMBER
+        : TenantMemberRole.VIEWER,
+    canViewPayloads: grant.role === SupportGrantRole.SUPPORT_OPERATOR,
+    user: { email: grant.staffEmail },
+    tenant: tenant ?? {
+      metadata: {
+        id: grant.tenantId,
+        createdAt: grant.createdAt,
+        updatedAt: grant.createdAt,
+      },
+      name: grant.tenantName,
+      slug: grant.tenantSlug,
+      version: TenantVersion.V1,
+    },
+  };
+}
+
+async function fetchSupportTenant(
+  tenantId: string,
+): Promise<Tenant | undefined> {
+  try {
+    return await queryClient.fetchQuery({
+      queryKey: ['tenant:get', tenantId],
+      queryFn: async () => (await api.tenantGet(tenantId)).data,
+      staleTime: 30_000,
+      retry: false,
+    });
+  } catch {
+    // An expired token cannot load the tenant; the grant's own name and slug
+    // are enough for the shell, and the banner explains the expiry.
+    return undefined;
+  }
+}
+
 export const userUniverseQuery = (isControlPlaneEnabled: boolean) => ({
   queryKey: ['user-universe', isControlPlaneEnabled],
   queryFn: async (): Promise<PossibleQueryResponses> => {
+    const supportSession = getSupportSession();
+    if (supportSession) {
+      const tenant = await fetchSupportTenant(supportSession.grant.tenantId);
+      return {
+        isControlPlaneEnabled: false,
+        organizations: null,
+        tenantMemberships: [
+          supportGrantTenantMember(supportSession.grant, tenant),
+        ],
+      };
+    }
+
     const [organizationsResult, tenantMemberships] = await Promise.all([
       isControlPlaneEnabled ? controlPlaneApi.organizationList() : null,
       isControlPlaneEnabled

@@ -64,6 +64,8 @@ const (
 	SourceAPI  Source = "api"
 	SourceGRPC Source = "grpc"
 	SourceCLI  Source = "cli"
+	// SourceSupport marks requests made by Hatchet staff through a support token.
+	SourceSupport Source = "support"
 )
 
 type contextKey string
@@ -75,6 +77,9 @@ const (
 	AccountIDKey      = contextKey("account_id")
 	UserIDKey         = contextKey("user_id")
 	SourceKey         = contextKey("source")
+	// SupportGrantIDKey carries the support grant id of a support token request, so every
+	// action taken during a support session can be traced back to the grant.
+	SupportGrantIDKey = contextKey("support_grant_id")
 
 	SourceMetadataKey = "x-hatchet-source"
 
